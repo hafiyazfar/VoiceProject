@@ -1,11 +1,16 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, List
 from enum import Enum
 from datetime import datetime
+from pathlib import Path
 import re
 import uuid
+
+FRONTEND_DIR = Path(__file__).resolve().parent.parent / "frontend"
 
 app = FastAPI(
     title="VoicePay Backend",
@@ -139,17 +144,17 @@ def fraud_check(user_id: str, amount: float, recipient: Contact) -> Dict[str, Op
     return {"risk_level": "low", "risk_reason": None}
 
 
-@app.get("/")
-def root():
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+
+@app.get("/api")
+def api_root():
     return {
         "message": "VoicePay Backend is running",
         "docs": "/docs",
     }
-
-
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
 
 
 @app.get("/contacts")
@@ -264,3 +269,16 @@ def get_transaction(transaction_id: str):
         raise HTTPException(status_code=404, detail="Transaction not found")
 
     return transaction
+
+
+# Serve the premium frontend at "/". Mounted last so API routes win.
+if FRONTEND_DIR.exists() and (FRONTEND_DIR / "index.html").exists():
+    app.mount(
+        "/",
+        StaticFiles(directory=str(FRONTEND_DIR), html=True),
+        name="frontend",
+    )
+else:
+    @app.get("/")
+    def _root_fallback():
+        return {"message": "VoicePay Backend is running", "docs": "/docs"}
